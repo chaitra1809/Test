@@ -1,0 +1,97 @@
+
+module serialadder(clk, rst, pload, adata, bdata, enable, pout);
+  input clk, rst, pload, enable;
+  input [7:0] adata, bdata;
+  output [7:0] pout;
+  wire shift_rega_lsb, shift_regb_lsb;
+  reg [7:0] shift_rega, shift_regb, shift_regc;
+  wire sum, cout, sum_del, cout_del;
+  reg holdc;
+  full_adder_1bit bit_adder_inst(shift_rega[0], shift_regb[0], holdc, sum, cout);
+  assign pout = shift_regc;
+  assign sum_del = sum & enable;
+  assign cout_del = cout & enable;
+
+  always @(posedge clk or rst)
+  begin
+    if (rst) begin
+      shift_rega <= 8'd0;
+      shift_regb <= 8'd0;
+      shift_regc <= 8'd0;
+    end else if (pload) begin
+      shift_rega <= adata;
+      shift_regb <= bdata;
+      shift_regc <= 8'b0;
+    end else if (enable) begin
+      shift_rega <= shift_rega >> 1;
+      shift_rega[7] <= shift_rega_lsb;
+      shift_regb <= shift_regb >> 1;
+      shift_regb[7] <= shift_regb_lsb;
+      shift_regc <= shift_regc >> 1;
+      shift_regc[7] <= sum_del;
+    end
+  end
+
+  assign shift_rega_lsb = shift_rega[0];
+  assign shift_regb_lsb = shift_regb[0];
+
+  always @(posedge clk or rst)
+  begin
+    if (rst) begin
+      holdc <= 1'b0;
+    end else if (enable) begin
+      holdc <= cout_del;
+    end else begin
+      holdc <= 1'b0;
+    end
+  end
+endmodule
+
+module serialadder_tb;
+  reg clk, rst, pload, enable;
+  reg [7:0] adata, bdata;
+  wire [7:0] pout;
+  serialadder DUT_serial_adder(clk, rst, pload, adata, bdata, enable, pout);
+  always #5 clk = ~clk;
+
+  initial begin
+    clk = 1'b0;
+    rst = 1'b1;
+    pload = 1'b0;
+    enable = 1'b0;
+    #10 rst = 1'b0;
+    #10 pload = 1'b1; enable = 1'b0;
+    adata = 8'd1; bdata = 8'd2;
+    $display($time, " First Data Loaded: adata=%0h, bdata=%0h, pout=%0h", adata, bdata, pout);
+    #10 pload = 1'b0; enable = 1'b1;
+    #200
+    $display($time, " First Addition Complete: adata=%0h, bdata=%0h, pout=%0h", adata, bdata, pout);
+    rst = 1'b0;
+    #10 pload = 1'b1; enable = 1'b0;
+    adata = 8'd2; bdata = 8'd3;
+    #10
+    $display($time, " Second Data Loaded: adata=%0h, bdata=%0h, pout=%0h", adata, bdata, pout);
+    pload = 1'b0; enable = 1'b1;
+    #200
+    $display($time, " Second Addition Complete: adata=%0h, bdata=%0h, pout=%0h", adata, bdata, pout);
+    $finish;
+  end
+
+  initial begin
+    `ifdef CAD_DUMP_ON
+      $recordfile("adder.trn");
+      $recordvars("depth=0");
+    `endif
+    `ifdef VCD_DUMP_ON
+      $dumpfile("adder.vcd");
+      $dumpvars("depth=0");
+    `endif
+  end
+endmodule
+
+module full_adder_1bit(a, b, ci, s, co);
+  input a, b, ci;
+  output s, co;
+  assign s = a ^ b ^ ci;
+  assign co = (a & b) | (b & ci) | (ci & a);
+endmodule
